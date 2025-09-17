@@ -1,0 +1,65 @@
+﻿# Visual Studio files
+.vs/
+bin/
+obj/
+*.user
+*.suo
+*.pdb
+
+# Firebase Credentials (IMPORTANT - Never commit!)
+Keys/
+firebase-service-account.json
+*-firebase-*.json
+.env
+
+# Configuration files with secrets (CRITICAL!)
+appsettings.json
+appsettings.*.json
+appsettings.Development.json
+appsettings.Production.json
+
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+
+# NuGet packages
+packages/
+*.nupkg
+*.snupkg
+
+# Temporary files
+*.tmp
+*.temp
+*~
+
+# Windows files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Sensitive files (OAuth, API keys, etc.)
+*client_secret*.json
+*oauth*.json
+*credentials*.json
+*.key
+*.pem
+
+# Environment variables
+.env*
+secrets.json
+
+# Package and publish artifacts
+AppPackages/
+BundleArtifacts/
+Package.StoreAssociation.xml

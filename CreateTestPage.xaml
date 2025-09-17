@@ -1,0 +1,379 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="Coding_Club_Anticheat.CreateTestPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Coding_Club_Anticheat"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header Section -->
+        <StackPanel Grid.Row="0" Margin="24,24,24,16">
+            <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,0,0,8">
+                <FontIcon Glyph="&#xE8AC;" FontSize="28" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                <TextBlock x:Name="PageTitle"
+                           Text="Create Test Code" 
+                           FontSize="32" 
+                           FontWeight="Bold" 
+                           VerticalAlignment="Center"/>
+            </StackPanel>
+            <TextBlock x:Name="WelcomeMessage"
+                       Text="Enter a test URL and optionally provide a custom title. The system will automatically fetch the page title if no custom title is provided." 
+                       FontSize="16" 
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                       Visibility="Collapsed"/>
+            <TextBlock Text="Enter a test URL and optionally provide a custom title. The system will automatically fetch the page title if no custom title is provided." 
+                       FontSize="16" 
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+        </StackPanel>
+
+        <!-- Main Content -->
+        <ScrollViewer Grid.Row="1" Padding="24,0,24,24" MaxWidth="1000" HorizontalAlignment="Stretch">
+            <StackPanel Spacing="24" HorizontalAlignment="Stretch">
+
+                <!-- Create New Test Section -->
+                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
+                        CornerRadius="12" 
+                        Padding="24"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1">
+                    <StackPanel Spacing="20">
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <FontIcon Glyph="&#xE710;" FontSize="18" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                            <TextBlock Text="Create New Test" 
+                                       FontSize="20" 
+                                       FontWeight="SemiBold"
+                                       VerticalAlignment="Center"/>
+                        </StackPanel>
+                        
+                        <!-- Test Title Input -->
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Test Title (Optional)" 
+                                       FontWeight="Medium"/>
+                            <TextBox x:Name="TestTitleTextBox" 
+                                     PlaceholderText="e.g., Data Structures Quiz, Algorithm Challenge..."
+                                     Height="40"
+                                     CornerRadius="6"
+                                     TextChanged="TestTitleTextBox_TextChanged"/>
+                            <TextBlock Text="Leave empty to use the automatically fetched page title" 
+                                       FontSize="12" 
+                                       Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                        </StackPanel>
+
+                        <!-- Test URL Input -->
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Test URL" 
+                                       FontWeight="Medium"/>
+                            <TextBox x:Name="TestUrlTextBox" 
+                                     PlaceholderText="https://hackerrank.com/challenges/..."
+                                     Height="40"
+                                     CornerRadius="6"
+                                     TextChanged="TestUrlTextBox_TextChanged"/>
+                            <TextBlock x:Name="UrlValidationText" 
+                                       FontSize="12" 
+                                       Foreground="{ThemeResource SystemErrorTextColor}"
+                                       Visibility="Collapsed"/>
+                        </StackPanel>
+
+                        <!-- Fetched Title Display -->
+                        <StackPanel x:Name="TitleFetchPanel" 
+                                    Spacing="8" 
+                                    Visibility="Collapsed">
+                            <TextBlock Text="Page Title" 
+                                       FontWeight="Medium"/>
+                            <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                                    CornerRadius="6"
+                                    Padding="12,8"
+                                    MinHeight="40">
+                                <Grid>
+                                    <StackPanel x:Name="TitleLoadingPanel" 
+                                                Orientation="Horizontal" 
+                                                Spacing="8" 
+                                                Visibility="Collapsed">
+                                        <ProgressRing IsActive="True" Width="16" Height="16"/>
+                                        <TextBlock Text="Fetching page title..." 
+                                                   FontSize="14" 
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                   VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                    <TextBlock x:Name="FetchedTitleText" 
+                                               FontSize="14" 
+                                               TextWrapping="Wrap"
+                                               VerticalAlignment="Center"
+                                               Visibility="Collapsed"/>
+                                    <TextBlock x:Name="TitleErrorText" 
+                                               FontSize="12" 
+                                               Foreground="{ThemeResource SystemErrorTextColor}"
+                                               TextWrapping="Wrap"
+                                               VerticalAlignment="Center"
+                                               Visibility="Collapsed"/>
+                                </Grid>
+                            </Border>
+                        </StackPanel>
+
+                        <!-- Action Buttons -->
+                        <StackPanel Orientation="Horizontal" 
+                                    Spacing="12" 
+                                    HorizontalAlignment="Right">
+                            <Button x:Name="CreateCodeButton" 
+                                    Click="CreateCodeButton_Click"
+                                    Style="{StaticResource AccentButtonStyle}"
+                                    IsEnabled="False"
+                                    Height="40"
+                                    Padding="16,0"
+                                    CornerRadius="6">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon Glyph="&#xE8AC;" FontSize="16"/>
+                                    <TextBlock Text="Generate Test Code" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+
+                        <!-- Loading Indicator -->
+                        <StackPanel x:Name="LoadingPanel" 
+                                    Orientation="Horizontal" 
+                                    Spacing="12" 
+                                    HorizontalAlignment="Center"
+                                    Visibility="Collapsed">
+                            <ProgressRing IsActive="True" Width="20" Height="20"/>
+                            <TextBlock Text="Creating test code..." VerticalAlignment="Center"/>
+                        </StackPanel>
+
+                        <!-- Success Result -->
+                        <Border x:Name="SuccessPanel" 
+                                Background="{ThemeResource SystemFillColorSuccessBackgroundBrush}"
+                                CornerRadius="8" 
+                                Padding="16"
+                                Visibility="Collapsed">
+                            <StackPanel Spacing="12">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon Glyph="&#xE73E;" 
+                                              FontSize="16" 
+                                              Foreground="{ThemeResource SystemFillColorSuccessBrush}"/>
+                                    <TextBlock Text="Test Code Created Successfully!" 
+                                               FontWeight="SemiBold" 
+                                               FontSize="16"
+                                               VerticalAlignment="Center"
+                                               Foreground="{ThemeResource SystemFillColorSuccessBrush}"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Spacing="12">
+                                    <TextBlock Text="Test Code:" 
+                                               FontWeight="Medium"
+                                               VerticalAlignment="Center"/>
+                                    <Border Background="{ThemeResource AccentFillColorDefaultBrush}"
+                                            CornerRadius="4"
+                                            Padding="8,4">
+                                        <TextBlock x:Name="GeneratedCodeText" 
+                                                   FontSize="18" 
+                                                   FontWeight="Bold" 
+                                                   FontFamily="Consolas"
+                                                   Foreground="White"/>
+                                    </Border>
+                                    <Button x:Name="CopyCodeButton" 
+                                            Click="CopyCodeButton_Click"
+                                            Height="32"
+                                            Padding="12,0"
+                                            CornerRadius="4">
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <FontIcon Glyph="&#xE8C8;" FontSize="12"/>
+                                            <TextBlock Text="Copy" FontSize="12" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
+                <!-- Existing Test Codes Section -->
+                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
+                        CornerRadius="12" 
+                        Padding="24"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1">
+                    <StackPanel Spacing="20">
+                        <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE8FD;" FontSize="18" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                                <TextBlock Text="Existing Test Codes" 
+                                           FontSize="20" 
+                                           FontWeight="SemiBold"
+                                           VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <Button x:Name="RefreshButton" 
+                                    Click="RefreshButton_Click"
+                                    Height="32"
+                                    Padding="12,0"
+                                    CornerRadius="4"
+                                    Margin="12,0,0,0">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <FontIcon Glyph="&#xE72C;" FontSize="12"/>
+                                    <TextBlock Text="Refresh" FontSize="12" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+                            <Button x:Name="DeleteAllButton" 
+                                    Click="DeleteAllButton_Click"
+                                    Height="32"
+                                    Padding="12,0"
+                                    CornerRadius="4"
+                                    Background="{ThemeResource SystemFillColorCriticalBackgroundBrush}"
+                                    ToolTipService.ToolTip="Delete all test codes permanently">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <FontIcon Glyph="&#xE74D;" FontSize="12" Foreground="White"/>
+                                    <TextBlock Text="Delete All" FontSize="12" VerticalAlignment="Center" Foreground="White"/>
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+
+                        <!-- Test Codes List -->
+                        <Grid>
+                            <!-- Loading Indicator for Test Codes -->
+                            <StackPanel x:Name="TestCodesLoadingPanel" 
+                                        Orientation="Horizontal" 
+                                        Spacing="12" 
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center"
+                                        Visibility="Collapsed"
+                                        Height="300">
+                                <ProgressRing IsActive="True" Width="24" Height="24"/>
+                                <TextBlock Text="Loading test codes..." 
+                                           FontSize="16"
+                                           VerticalAlignment="Center"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            </StackPanel>
+
+                            <!-- Test Codes ScrollViewer -->
+                            <ScrollViewer x:Name="TestCodesScrollViewer"
+                                          Height="auto" 
+                                          HorizontalScrollBarVisibility="Auto"
+                                          VerticalScrollBarVisibility="Auto">
+                                <ListView x:Name="TestCodesListView" 
+                                          SelectionMode="None"
+                                          Padding="0"
+                                          Background="Transparent">
+                                    <ListView.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}" 
+                                                    CornerRadius="8" 
+                                                    Padding="16" 
+                                                    Margin="0,4">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+
+                                                    <!-- Test Code -->
+                                                    <Border Grid.Column="0" 
+                                                            Background="{ThemeResource AccentFillColorDefaultBrush}"
+                                                            CornerRadius="4" 
+                                                            Padding="8,4" 
+                                                            Margin="0,0,12,0">
+                                                        <TextBlock Text="{Binding TestCode}" 
+                                                                   FontFamily="Consolas" 
+                                                                   FontWeight="Bold" 
+                                                                   FontSize="14"
+                                                                   VerticalAlignment="Center"
+                                                                   Foreground="White"/>
+                                                    </Border>
+
+                                                    <!-- Test Info -->
+                                                    <StackPanel Grid.Column="1" Spacing="4">
+                                                        <TextBlock Text="{Binding TestTitle}" 
+                                                                   FontWeight="Medium"
+                                                                   FontSize="14"
+                                                                   Visibility="{Binding HasTitle}"/>
+                                                        <TextBlock Text="{Binding TestUrl}" 
+                                                                   FontSize="12" 
+                                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                                   TextTrimming="CharacterEllipsis"/>
+                                                        <StackPanel Orientation="Horizontal" Spacing="16">
+                                                            <TextBlock Text="{Binding CreatedAtString}" 
+                                                                       FontSize="11" 
+                                                                       Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                                                            <TextBlock Text="{Binding UsageString}" 
+                                                                       FontSize="11" 
+                                                                       Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                                                        </StackPanel>
+                                                    </StackPanel>
+
+                                                    <!-- Status -->
+                                                    <Border Grid.Column="2" 
+                                                            Background="{Binding StatusColor}" 
+                                                            CornerRadius="3" 
+                                                            Padding="6,3" 
+                                                            Margin="12,0">
+                                                        <TextBlock Text="{Binding StatusText}" 
+                                                                   FontSize="10" 
+                                                                   FontWeight="Medium" 
+                                                                   VerticalAlignment="Center"
+                                                                   Foreground="White"/>
+                                                    </Border>
+
+                                                    <!-- Actions -->
+                                                    <StackPanel Grid.Column="3" 
+                                                                Orientation="Horizontal" 
+                                                                Spacing="6" 
+                                                                Margin="12,0,0,0">
+                                                        <Button Content="{Binding ToggleText}" 
+                                                                Tag="{Binding TestCode}"
+                                                                Click="ToggleStatusButton_Click"
+                                                                Height="28" 
+                                                                Padding="8,0" 
+                                                                FontSize="10"
+                                                                CornerRadius="3"/>
+                                                        <Button Tag="{Binding TestCode}"
+                                                                Click="DeleteButton_Click"
+                                                                Height="28" 
+                                                                Padding="6,0" 
+                                                                CornerRadius="3"
+                                                                Background="{ThemeResource SystemFillColorCriticalBackgroundBrush}"
+                                                                ToolTipService.ToolTip="Delete this test code">
+                                                            <FontIcon Glyph="&#xE74D;" FontSize="11" Foreground="White"/>
+                                                        </Button>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ListView.ItemTemplate>
+                                </ListView>
+                            </ScrollViewer>
+                        </Grid>
+
+                        <!-- Empty State -->
+                        <StackPanel x:Name="EmptyStatePanel" 
+                                    HorizontalAlignment="Center" 
+                                    Spacing="12"
+                                    Visibility="Collapsed"
+                                    Margin="0,24">
+                            <FontIcon Glyph="&#xE8F5;" 
+                                      FontSize="48" 
+                                      HorizontalAlignment="Center"
+                                      Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                            <TextBlock Text="No test codes created yet" 
+                                       FontSize="16" 
+                                       FontWeight="Medium"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       HorizontalAlignment="Center"/>
+                            <TextBlock Text="Create your first test code above" 
+                                       FontSize="14" 
+                                       Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                       HorizontalAlignment="Center"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Page>

@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "Coding Club Anticheat (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "Coding Club Anticheat (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}
