@@ -1,7 +1,7 @@
 ﻿# Privacy Policy for Coding Club Anticheat
 
-**Effective Date:** [Insert Date]  
-**Last Updated:** [Insert Date]
+**Effective Date:** 17 September 2025 
+**Last Updated:** 17 September 2025
 
 ## Introduction
 
