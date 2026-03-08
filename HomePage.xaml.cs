@@ -1,6 +1,7 @@
 ﻿using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Navigation;
 using System;
 using System.IO;
 using System.Linq;
@@ -24,13 +25,8 @@ namespace Coding_Club_Anticheat
         private int _violationCount = 0;
         private readonly FirebaseService _firebaseService;
         private readonly ConfigurationService _configurationService;
-        private readonly List<string> _allowedDomains = new() 
-        { 
-            "hackerrank.com", 
-            "www.hackerrank.com", 
-            "hr-challenge-images.s3.amazonaws.com",
-            "hrcdn.net"
-        };
+        private bool _isDialogShowing = false; // Track if a dialog is currently open
+        private List<string> _allowedDomains = new(); // Changed from readonly to mutable for dynamic updates
 
         public HomePage()
         {
@@ -38,6 +34,69 @@ namespace Coding_Club_Anticheat
             _firebaseService = new FirebaseService();
             _configurationService = new ConfigurationService();
             UpdateStartTestButtonState();
+        }
+
+        protected override async void OnNavigatedTo(NavigationEventArgs e)
+        {
+            base.OnNavigatedTo(e);
+
+            System.Diagnostics.Debug.WriteLine($"[HomePage] OnNavigatedTo called");
+
+            // Check if user confirmed test launch from TestLaunchPage
+            if (Application.Current.Resources.ContainsKey("TestLaunchConfirmed"))
+            {
+                System.Diagnostics.Debug.WriteLine($"[HomePage] Found TestLaunchConfirmed key");
+                
+                if (Application.Current.Resources["TestLaunchConfirmed"] is bool confirmed && confirmed)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[HomePage] TestLaunchConfirmed is TRUE - proceeding with launch");
+                    
+                    // Clear the flag immediately
+                    Application.Current.Resources.Remove("TestLaunchConfirmed");
+
+                    // Get the test info
+                    if (Application.Current.Resources.ContainsKey("TestLaunchCode") &&
+                        Application.Current.Resources.ContainsKey("TestLaunchInfo"))
+                    {
+                        string testCode = Application.Current.Resources["TestLaunchCode"] as string ?? "";
+                        var testCodeInfo = Application.Current.Resources["TestLaunchInfo"] as TestCodeInfo;
+
+                        System.Diagnostics.Debug.WriteLine($"[HomePage] Retrieved testCode: {testCode}");
+                        System.Diagnostics.Debug.WriteLine($"[HomePage] Retrieved testCodeInfo: {testCodeInfo?.TestTitle ?? "NULL"}");
+
+                        Application.Current.Resources.Remove("TestLaunchCode");
+                        Application.Current.Resources.Remove("TestLaunchInfo");
+
+                        if (testCodeInfo != null && !string.IsNullOrEmpty(testCode))
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[HomePage] Launching browser for test: {testCodeInfo.TestTitle}");
+                            
+                            // Launch the browser
+                            ShowStartTestLoading(true);
+                            await LaunchControlledBrowser(testCode, testCodeInfo);
+                            ShowStartTestLoading(false);
+                            
+                            System.Diagnostics.Debug.WriteLine($"[HomePage] Browser launch completed");
+                        }
+                        else
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[HomePage] ERROR: testCodeInfo or testCode is null/empty");
+                        }
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[HomePage] ERROR: TestLaunchCode or TestLaunchInfo keys not found");
+                    }
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine($"[HomePage] TestLaunchConfirmed is FALSE or not bool");
+                }
+            }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine($"[HomePage] TestLaunchConfirmed key not found - normal navigation");
+            }
         }
 
         private void UpdateStartTestButtonState()
@@ -123,23 +182,63 @@ namespace Coding_Club_Anticheat
             
             if (testCode.Length == 4)
             {
-                // First check if the test code exists in database
-                var testCodeInfo = await ValidateTestCodeAsync(testCode);
-                if (testCodeInfo != null)
+                // Show loading state
+                ShowStartTestLoading(true);
+                
+                try
                 {
-                    // Show the test title in popup and launch browser
-                    await ShowTestCodeMessage(testCodeInfo);
-                    await LaunchControlledBrowser(testCode, testCodeInfo);
+                    // First check if the test code exists in database
+                    var testCodeInfo = await ValidateTestCodeAsync(testCode);
+                    
+                    // Hide loading state
+                    ShowStartTestLoading(false);
+                    
+                    if (testCodeInfo != null)
+                    {
+                        // Navigate to the full-page test launch confirmation
+                        Frame.Navigate(typeof(TestLaunchPage), new TestLaunchPageParameter
+                        {
+                            TestCodeInfo = testCodeInfo,
+                            TestCode = testCode
+                        });
+                    }
+                    else
+                    {
+                        // Test code not found or inactive
+                        await ShowTestCodeNotFoundMessage(testCode);
+                    }
                 }
-                else
+                catch (Exception ex)
                 {
-                    // Test code not found or inactive
-                    await ShowTestCodeNotFoundMessage(testCode);
+                    ShowStartTestLoading(false);
+                    System.Diagnostics.Debug.WriteLine($"Error in StartTestButton_Click: {ex.Message}");
+                    await ShowErrorMessage("Error", "An unexpected error occurred. Please try again.");
                 }
             }
             else
             {
                 await ShowIncompleteCodeMessage();
+            }
+        }
+
+        private void ShowStartTestLoading(bool isLoading)
+        {
+            // Find the controls by name
+            var startTestContent = StartTestButton?.FindName("StartTestContent") as StackPanel;
+            var startTestLoadingContent = StartTestButton?.FindName("StartTestLoadingContent") as StackPanel;
+            
+            if (startTestContent != null && startTestLoadingContent != null && StartTestButton != null)
+            {
+                startTestContent.Visibility = isLoading ? Visibility.Collapsed : Visibility.Visible;
+                startTestLoadingContent.Visibility = isLoading ? Visibility.Visible : Visibility.Collapsed;
+                StartTestButton.IsEnabled = !isLoading;
+                ClearButton.IsEnabled = !isLoading;
+                
+                // Disable digit inputs while loading
+                Digit1.IsEnabled = !isLoading;
+                Digit2.IsEnabled = !isLoading;
+                Digit3.IsEnabled = !isLoading;
+                Digit4.IsEnabled = !isLoading;
             }
         }
 
@@ -171,9 +270,15 @@ namespace Coding_Club_Anticheat
                 bool initialized;
                 if (!string.IsNullOrEmpty(serviceAccountKeyPath))
                 {
-                    // Use direct service account key path
+                    // Use direct service account key path with embedded JSON support
                     System.Diagnostics.Debug.WriteLine($"Initializing Firebase with direct service account key: {serviceAccountKeyPath}");
-                    initialized = await _firebaseService.InitializeAsync(firebaseProjectId, serviceAccountKeyPath);
+                    initialized = await _firebaseService.InitializeAsync(firebaseProjectId, serviceAccountKeyPath, settings.Firebase.ServiceAccountKeyJson);
+                }
+                else if (!string.IsNullOrEmpty(settings.Firebase.ServiceAccountKeyJson))
+                {
+                    // Use embedded JSON credentials (for distributed apps)
+                    System.Diagnostics.Debug.WriteLine("Initializing Firebase with embedded credentials");
+                    initialized = await _firebaseService.InitializeAsync(firebaseProjectId, null, settings.Firebase.ServiceAccountKeyJson);
                 }
                 else
                 {
@@ -251,50 +356,74 @@ namespace Coding_Club_Anticheat
 
         private async Task ShowTestCodeMessage(TestCodeInfo testCodeInfo)
         {
-            string testTitle = !string.IsNullOrEmpty(testCodeInfo.TestTitle) 
-                ? testCodeInfo.TestTitle 
-                : "Untitled Test";
-
-            ContentDialog dialog = new ContentDialog()
+            // Prevent multiple dialogs
+            if (_isDialogShowing) return;
+            
+            try
             {
-                Title = $"🎯 Launching Test: {testTitle}",
-                Content = $"📋 Test Details:\n" +
-                         $"• Title: {testTitle}\n" +
-                         $"• Code: {testCodeInfo.TestCode}\n" +
-                         $"• Usage Count: {testCodeInfo.UsageCount}\n\n" +
-                         $"🚨 ZERO-TOLERANCE MODE ACTIVATED:\n" +
-                         $"• ANY cheating attempt = IMMEDIATE TERMINATION\n" +
-                         $"• No warnings, no second chances\n" +
-                         $"• Tab switching = INSTANT EXIT\n" +
-                         $"• Copy/paste = INSTANT EXIT\n" +
-                         $"• Developer tools = INSTANT EXIT\n" +
-                         $"• External navigation = INSTANT EXIT\n" +
-                         $"• Right-click = INSTANT EXIT\n\n" +
-                         $"⚠️ WARNING: This is your ONLY chance to complete the test!\n\n" +
-                         $"Press OK to launch the zero-tolerance browser.",
-                CloseButtonText = "I Understand - Launch Test",
-                XamlRoot = this.XamlRoot
-            };
+                _isDialogShowing = true;
+                
+                string testTitle = !string.IsNullOrEmpty(testCodeInfo.TestTitle) 
+                    ? testCodeInfo.TestTitle 
+                    : "Untitled Test";
 
-            await dialog.ShowAsync();
+                ContentDialog dialog = new ContentDialog()
+                {
+                    Title = $"🎯 Launching Test: {testTitle}",
+                    Content = $"📋 Test Details:\n" +
+                             $"• Title: {testTitle}\n" +
+                             $"• Code: {testCodeInfo.TestCode}\n" +
+                             $"• Usage Count: {testCodeInfo.UsageCount}\n\n" +
+                             $"🚨 ZERO-TOLERANCE MODE ACTIVATED:\n" +
+                             $"• ANY cheating attempt = IMMEDIATE TERMINATION\n" +
+                             $"• No warnings, no second chances\n" +
+                             $"• Tab switching = INSTANT EXIT\n" +
+                             $"• Copy/paste = INSTANT EXIT\n" +
+                             $"• Developer tools = INSTANT EXIT\n" +
+                             $"• External navigation = INSTANT EXIT\n" +
+                             $"• Right-click = INSTANT EXIT\n\n" +
+                             $"⚠️ WARNING: This is your ONLY chance to complete the test!\n\n" +
+                             $"Press OK to launch the zero-tolerance browser.",
+                    CloseButtonText = "I Understand - Launch Test",
+                    XamlRoot = this.XamlRoot
+                };
+
+                await dialog.ShowAsync();
+            }
+            finally
+            {
+                _isDialogShowing = false;
+            }
         }
 
         private async Task ShowTestCodeNotFoundMessage(string testCode)
         {
-            ContentDialog dialog = new ContentDialog()
+            // Prevent multiple dialogs
+            if (_isDialogShowing) return;
+            
+            try
             {
-                Title = "❌ Test Code Not Found",
-                Content = $"The test code '{testCode}' was not found or is currently inactive.\n\n" +
-                         $"Possible reasons:\n" +
-                         $"• The code doesn't exist in the database\n" +
-                         $"• The code has been disabled by the administrator\n" +
-                         $"• The code has expired\n\n" +
-                         $"Please check your code and try again, or contact your instructor for assistance.",
-                CloseButtonText = "OK",
-                XamlRoot = this.XamlRoot
-            };
+                _isDialogShowing = true;
+                
+                ContentDialog dialog = new ContentDialog()
+                {
+                    Title = "❌ Test Code Not Found",
+                    Content = $"The test code '{testCode}' was not found or is currently inactive.\n\n" +
+                             $"Possible reasons:\n" +
+                             $"• The code doesn't exist in the database\n" +
+                             $"• The code has been disabled by the administrator\n" +
+                             $"• The code has expired\n\n" +
+                             $"Please check your code and try again, or contact your instructor for assistance.",
+                    CloseButtonText = "OK",
+                    XamlRoot = this.XamlRoot
+                };
 
-            await dialog.ShowAsync();
+                await dialog.ShowAsync();
+            }
+            finally
+            {
+                _isDialogShowing = false;
+            }
         }
 
         private async Task<string> GetTestUrlFromFirebase(string testCode)
@@ -321,7 +450,11 @@ namespace Coding_Club_Anticheat
                 bool initialized;
                 if (!string.IsNullOrEmpty(serviceAccountKeyPath))
                 {
-                    initialized = await _firebaseService.InitializeAsync(firebaseProjectId, serviceAccountKeyPath);
+                    initialized = await _firebaseService.InitializeAsync(firebaseProjectId, serviceAccountKeyPath, settings.Firebase.ServiceAccountKeyJson);
+                }
+                else if (!string.IsNullOrEmpty(settings.Firebase.ServiceAccountKeyJson))
+                {
+                    initialized = await _firebaseService.InitializeAsync(firebaseProjectId, null, settings.Firebase.ServiceAccountKeyJson);
                 }
                 else
                 {
@@ -369,11 +502,45 @@ namespace Coding_Club_Anticheat
                 if (!string.IsNullOrEmpty(testUrl))
                 {
                     _allowedTestUrl = testUrl;
+                    
+                    // Dynamically set allowed domains based on test URL
+                    try
+                    {
+                        var uri = new Uri(testUrl);
+                        _allowedDomains.Clear();
+                        _allowedDomains.Add(uri.Host.ToLowerInvariant());
+                        
+                        // Also allow www version
+                        if (!uri.Host.StartsWith("www.", StringComparison.OrdinalIgnoreCase))
+                        {
+                            _allowedDomains.Add($"www.{uri.Host}".ToLowerInvariant());
+                        }
+                        else
+                        {
+                            // If it starts with www, also allow non-www version
+                            _allowedDomains.Add(uri.Host.Replace("www.", "", StringComparison.OrdinalIgnoreCase).ToLowerInvariant());
+                        }
+                        
+                        Console.WriteLine($"ANTICHEAT: Allowed domains set to: {string.Join(", ", _allowedDomains)}");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"ANTICHEAT: Failed to parse test URL domain: {ex.Message}");
+                        // If URL parsing fails, clear domains (will allow any domain)
+                        _allowedDomains.Clear();
+                    }
                 }
                 else
                 {
                     // Final fallback to HackerRank pattern
                     _allowedTestUrl = $"https://hackerrank.com";
+                    _allowedDomains = new List<string> 
+                    { 
+                        "hackerrank.com", 
+                        "www.hackerrank.com", 
+                        "hr-challenge-images.s3.amazonaws.com",
+                        "hrcdn.net"
+                    };
                 }
                 
                 _lastValidUrl = _allowedTestUrl;
@@ -391,7 +558,6 @@ namespace Coding_Club_Anticheat
             }
         }
 
-        // ... Include all the anticheat methods from MainWindow here ...
         private static Task<IWebDriver> CreateControlledBrowser()
         {
             try
@@ -479,10 +645,109 @@ namespace Coding_Club_Anticheat
                     return;
                 }
             }
+            catch (OpenQA.Selenium.WebDriverException ex)
+            {
+                // Browser was closed or connection lost
+                Console.WriteLine($"ANTICHEAT: Browser closed or connection lost: {ex.Message}");
+                _urlMonitoringTimer?.Stop();
+                
+                // Cleanup and show message
+                await CleanupBrowserResources();
+                
+                this.DispatcherQueue.TryEnqueue(async () =>
+                {
+                    await ShowBrowserClosedMessage();
+                });
+            }
+            catch (System.Net.Http.HttpRequestException ex)
+            {
+                // Network issue with WebDriver communication
+                Console.WriteLine($"ANTICHEAT: WebDriver communication error: {ex.Message}");
+                _urlMonitoringTimer?.Stop();
+                await CleanupBrowserResources();
+                
+                this.DispatcherQueue.TryEnqueue(async () =>
+                {
+                    await ShowBrowserClosedMessage();
+                });
+            }
+            catch (NullReferenceException ex)
+            {
+                // WebDriver was disposed
+                Console.WriteLine($"ANTICHEAT: WebDriver was disposed: {ex.Message}");
+                _urlMonitoringTimer?.Stop();
+                await CleanupBrowserResources();
+            }
             catch (Exception ex)
             {
                 Console.WriteLine($"ANTICHEAT: URL monitoring error: {ex.Message}");
                 _urlMonitoringTimer?.Stop();
+                await CleanupBrowserResources();
+            }
+        }
+
+        private async Task CleanupBrowserResources()
+        {
+            try
+            {
+                _urlMonitoringTimer?.Stop();
+                _urlMonitoringTimer?.Dispose();
+                _urlMonitoringTimer = null;
+
+                if (_webDriver != null)
+                {
+                    try
+                    {
+                        _webDriver.Quit();
+                    }
+                    catch { }
+                    
+                    try
+                    {
+                        _webDriver.Dispose();
+                    }
+                    catch { }
+                    
+                    _webDriver = null;
+                }
+                
+                Console.WriteLine("ANTICHEAT: Browser resources cleaned up");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"ANTICHEAT: Error during cleanup: {ex.Message}");
+            }
+            
+            await Task.CompletedTask;
+        }
+
+        private async Task ShowBrowserClosedMessage()
+        {
+            if (_isDialogShowing) return;
+            
+            try
+            {
+                _isDialogShowing = true;
+                
+                ContentDialog dialog = new ContentDialog()
+                {
+                    Title = "⚠️ Browser Closed",
+                    Content = "The test browser was closed.\n\n" +
+                             "If this was unintentional, you'll need to restart the test with a new test code.\n\n" +
+                             "If you encountered a violation, please contact your instructor.",
+                    CloseButtonText = "OK",
+                    XamlRoot = this.XamlRoot
+                };
+
+                await dialog.ShowAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"ANTICHEAT: Error showing browser closed message: {ex.Message}");
+            }
+            finally
+            {
+                _isDialogShowing = false;
             }
         }
 
@@ -495,21 +760,25 @@ namespace Coding_Club_Anticheat
             {
                 if (_webDriver != null)
                 {
-                    ((IJavaScriptExecutor)_webDriver).ExecuteScript($@"
-                        alert('🚨 CHEATING DETECTED - TEST TERMINATED!\\n\\nViolation Type: {violationType}\\n{(string.IsNullOrEmpty(details) ? "" : $"Details: {details}\\n")}\\nThe test session will now end.');
-                    ");
+                    try
+                    {
+                        ((IJavaScriptExecutor)_webDriver).ExecuteScript($@"
+                            alert('🚨 CHEATING DETECTED - TEST TERMINATED!\\n\\nViolation Type: {violationType}\\n{(string.IsNullOrEmpty(details) ? "" : $"Details: {details}\\n")}\\nThe test session will now end.');
+                        ");
+                    }
+                    catch
+                    {
+                        // Browser might already be closed, ignore
+                    }
                 }
             }
-            catch (Exception) { }
-
-            try
+            catch (Exception ex)
             {
-                _urlMonitoringTimer?.Stop();
-                _webDriver?.Quit();
-                _webDriver?.Dispose();
-                _webDriver = null;
+                Console.WriteLine($"ANTICHEAT: Error showing cheat alert: {ex.Message}");
             }
-            catch (Exception) { }
+
+            // Cleanup browser resources
+            await CleanupBrowserResources();
 
             this.DispatcherQueue.TryEnqueue(async () =>
             {
@@ -520,15 +789,27 @@ namespace Coding_Club_Anticheat
 
         private async Task ShowCheatDetectedDialog(string violationType, string details)
         {
-            ContentDialog dialog = new ContentDialog()
+            // Prevent multiple dialogs
+            if (_isDialogShowing) return;
+            
+            try
             {
-                Title = "🚨 CHEATING DETECTED - TEST TERMINATED",
-                Content = $"Violation: {violationType}\n{(string.IsNullOrEmpty(details) ? "" : $"Details: {details}\n")}\nViolation Count: {_violationCount}\n\nThe test session has been terminated due to cheating.\nThis incident has been logged.\n\nThe application will now close.",
-                CloseButtonText = "Exit",
-                XamlRoot = this.XamlRoot
-            };
+                _isDialogShowing = true;
+                
+                ContentDialog dialog = new ContentDialog()
+                {
+                    Title = "🚨 CHEATING DETECTED - TEST TERMINATED",
+                    Content = $"Violation: {violationType}\n{(string.IsNullOrEmpty(details) ? "" : $"Details: {details}\n")}\nViolation Count: {_violationCount}\n\nThe test session has been terminated due to cheating.\nThis incident has been logged.\n\nThe application will now close.",
+                    CloseButtonText = "Exit",
+                    XamlRoot = this.XamlRoot
+                };
 
-            await dialog.ShowAsync();
+                await dialog.ShowAsync();
+            }
+            finally
+            {
+                _isDialogShowing = false;
+            }
         }
 
         private async Task EnsureSecurityScriptsActive()
@@ -564,15 +845,30 @@ namespace Coding_Club_Anticheat
                     await InjectSecurityScriptOnly(_webDriver);
                 }
             }
+            catch (OpenQA.Selenium.WebDriverException ex)
+            {
+                Console.WriteLine($"ANTICHEAT: Browser disconnected during security check: {ex.Message}");
+                // Don't try to inject, browser is likely closed
+                throw; // Let the caller handle it
+            }
+            catch (System.Net.Http.HttpRequestException ex)
+            {
+                Console.WriteLine($"ANTICHEAT: Network error during security check: {ex.Message}");
+                throw; // Let the caller handle it
+            }
             catch (Exception ex)
             {
                 Console.WriteLine($"ANTICHEAT: Security check error: {ex.Message}");
                 try
                 {
-                    await InjectSecurityScriptOnly(_webDriver);
+                    if (_webDriver != null)
+                    {
+                        await InjectSecurityScriptOnly(_webDriver);
+                    }
                 }
-                catch (Exception)
+                catch (Exception injectionEx)
                 {
+                    Console.WriteLine($"ANTICHEAT: Failed to re-inject scripts: {injectionEx.Message}");
                     await HandleCheatDetected("Security Script Failure", "Could not maintain security on page change");
                 }
             }
@@ -726,7 +1022,11 @@ namespace Coding_Club_Anticheat
             var jsViolationTimer = new Timer(500);
             jsViolationTimer.Elapsed += async (sender, e) =>
             {
-                if (_webDriver == null) return;
+                if (_webDriver == null)
+                {
+                    jsViolationTimer?.Stop();
+                    return;
+                }
 
                 try
                 {
@@ -742,10 +1042,31 @@ namespace Coding_Club_Anticheat
                         await HandleCheatDetected($"JavaScript: {violationType}", details);
                     }
                 }
-                catch (Exception) { }
+                catch (OpenQA.Selenium.WebDriverException)
+                {
+                    // Browser was closed or connection lost
+                    jsViolationTimer.Stop();
+                }
+                catch (System.Net.Http.HttpRequestException)
+                {
+                    // Network issue with WebDriver communication
+                    jsViolationTimer.Stop();
+                }
+                catch (NullReferenceException)
+                {
+                    // WebDriver was disposed
+                    jsViolationTimer.Stop();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"ANTICHEAT: JS violation monitoring error: {ex.Message}");
+                    jsViolationTimer.Stop();
+                }
             };
             jsViolationTimer.AutoReset = true;
             jsViolationTimer.Start();
+            
+            Console.WriteLine("ANTICHEAT: JavaScript violation monitoring started");
         }
 
         private async Task ShowTestCodeMessage()
@@ -763,38 +1084,62 @@ namespace Coding_Club_Anticheat
 
         private async Task ShowIncompleteCodeMessage()
         {
-            ContentDialog dialog = new ContentDialog()
-            {
-                Title = "Incomplete Code",
-                Content = "Please enter all 4 digits of the test code.",
-                CloseButtonText = "OK",
-                XamlRoot = this.XamlRoot
-            };
-
-            await dialog.ShowAsync();
+            // Prevent multiple dialogs
+            if (_isDialogShowing) return;
             
-            // Focus on the first empty digit
-            if (string.IsNullOrEmpty(Digit1?.Text))
-                Digit1?.Focus(FocusState.Programmatic);
-            else if (string.IsNullOrEmpty(Digit2?.Text))
-                Digit2?.Focus(FocusState.Programmatic);
-            else if (string.IsNullOrEmpty(Digit3?.Text))
-                Digit3?.Focus(FocusState.Programmatic);
-            else if (string.IsNullOrEmpty(Digit4?.Text))
-                Digit4?.Focus(FocusState.Programmatic);
+            try
+            {
+                _isDialogShowing = true;
+                
+                ContentDialog dialog = new ContentDialog()
+                {
+                    Title = "Incomplete Code",
+                    Content = "Please enter all 4 digits of the test code.",
+                    CloseButtonText = "OK",
+                    XamlRoot = this.XamlRoot
+                };
+
+                await dialog.ShowAsync();
+                
+                // Focus on the first empty digit
+                if (string.IsNullOrEmpty(Digit1?.Text))
+                    Digit1?.Focus(FocusState.Programmatic);
+                else if (string.IsNullOrEmpty(Digit2?.Text))
+                    Digit2?.Focus(FocusState.Programmatic);
+                else if (string.IsNullOrEmpty(Digit3?.Text))
+                    Digit3?.Focus(FocusState.Programmatic);
+                else if (string.IsNullOrEmpty(Digit4?.Text))
+                    Digit4?.Focus(FocusState.Programmatic);
+            }
+            finally
+            {
+                _isDialogShowing = false;
+            }
         }
 
         private async Task ShowErrorMessage(string title, string message)
         {
-            ContentDialog dialog = new ContentDialog()
+            // Prevent multiple dialogs
+            if (_isDialogShowing) return;
+            
+            try
             {
-                Title = title,
-                Content = message,
-                CloseButtonText = "OK",
-                XamlRoot = this.XamlRoot
-            };
+                _isDialogShowing = true;
+                
+                ContentDialog dialog = new ContentDialog()
+                {
+                    Title = title,
+                    Content = message,
+                    CloseButtonText = "OK",
+                    XamlRoot = this.XamlRoot
+                };
 
-            await dialog.ShowAsync();
+                await dialog.ShowAsync();
+            }
+            finally
+            {
+                _isDialogShowing = false;
+            }
         }
     }
 }

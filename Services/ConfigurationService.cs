@@ -73,25 +73,59 @@ namespace Coding_Club_Anticheat.Services
                     System.Diagnostics.Debug.WriteLine($"  Firebase.ApiKey: {(string.IsNullOrEmpty(appSettings.Firebase.ApiKey) ? "NOT SET" : "SET")}");
                     System.Diagnostics.Debug.WriteLine($"  TestCodeSettings.DefaultProjectId: {appSettings.TestCodeSettings.DefaultProjectId ?? "NOT SET"}");
                     
-                    // If the service account key path is relative, try to make it absolute
-                    if (!string.IsNullOrEmpty(appSettings.Firebase.ServiceAccountKeyPath) && 
-                        !Path.IsPathRooted(appSettings.Firebase.ServiceAccountKeyPath))
+                    // Enhanced path resolution for service account key file
+                    if (!string.IsNullOrEmpty(appSettings.Firebase.ServiceAccountKeyPath))
                     {
-                        var keyPaths = new[]
+                        string originalPath = appSettings.Firebase.ServiceAccountKeyPath;
+                        System.Diagnostics.Debug.WriteLine($"  Original ServiceAccountKeyPath: {originalPath}");
+                        
+                        // If the path is relative, try to make it absolute by checking multiple locations
+                        if (!Path.IsPathRooted(originalPath))
                         {
-                            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, appSettings.Firebase.ServiceAccountKeyPath),
-                            Path.Combine(Directory.GetCurrentDirectory(), appSettings.Firebase.ServiceAccountKeyPath),
-                            Path.Combine(Path.GetDirectoryName(configPath) ?? "", appSettings.Firebase.ServiceAccountKeyPath)
-                        };
-
-                        foreach (var keyPath in keyPaths)
-                        {
-                            System.Diagnostics.Debug.WriteLine($"  Checking key file: {keyPath} - Exists: {File.Exists(keyPath)}");
-                            if (File.Exists(keyPath))
+                            var keyPaths = new[]
                             {
-                                appSettings.Firebase.ServiceAccountKeyPath = keyPath;
-                                System.Diagnostics.Debug.WriteLine($"  ✓ Updated key path to: {keyPath}");
-                                break;
+                                // Relative to application base directory (most common for deployed apps)
+                                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, originalPath),
+                                // Relative to current working directory (for development)
+                                Path.Combine(Directory.GetCurrentDirectory(), originalPath),
+                                // Relative to config file directory
+                                Path.Combine(Path.GetDirectoryName(configPath) ?? "", originalPath),
+                                // Relative to AppData (for user-specific deployments)
+                                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Coding Club Anticheat", originalPath),
+                                // Common deployment locations
+                                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Keys", "firebase-service-account.json"),
+                                Path.Combine(Directory.GetCurrentDirectory(), "Keys", "firebase-service-account.json")
+                            };
+
+                            bool pathResolved = false;
+                            foreach (var keyPath in keyPaths)
+                            {
+                                string normalizedPath = Path.GetFullPath(keyPath);
+                                System.Diagnostics.Debug.WriteLine($"  Checking key file: {normalizedPath} - Exists: {File.Exists(normalizedPath)}");
+                                if (File.Exists(normalizedPath))
+                                {
+                                    appSettings.Firebase.ServiceAccountKeyPath = normalizedPath;
+                                    System.Diagnostics.Debug.WriteLine($"  ✓ Resolved key path to: {normalizedPath}");
+                                    pathResolved = true;
+                                    break;
+                                }
+                            }
+                            
+                            if (!pathResolved)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"  ⚠️ Warning: Service account key file not found in any location!");
+                                System.Diagnostics.Debug.WriteLine($"  Expected relative path: {originalPath}");
+                                System.Diagnostics.Debug.WriteLine($"  Make sure the file exists in one of the searched locations.");
+                            }
+                        }
+                        else
+                        {
+                            // Absolute path - just check if it exists
+                            bool exists = File.Exists(originalPath);
+                            System.Diagnostics.Debug.WriteLine($"  Absolute path exists: {exists}");
+                            if (!exists)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"  ⚠️ Warning: Service account key file not found at absolute path: {originalPath}");
                             }
                         }
                     }
@@ -119,6 +153,7 @@ namespace Coding_Club_Anticheat.Services
     {
         public string ProjectId { get; set; } = "";
         public string ServiceAccountKeyPath { get; set; } = "";
+        public string ServiceAccountKeyJson { get; set; } = ""; // Embedded JSON credentials (Base64 encoded for security)
         public string ApiKey { get; set; } = "";
         public string GoogleOAuthClientId { get; set; } = "";
         public string GoogleOAuthClientSecret { get; set; } = "";

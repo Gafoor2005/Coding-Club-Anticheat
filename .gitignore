@@ -10,6 +10,7 @@ obj/
 Keys/
 firebase-service-account.json
 *-firebase-*.json
+firebase-credentials-base64.txt
 .env
 
 # Configuration files with secrets (CRITICAL!)
@@ -54,6 +55,7 @@ $RECYCLE.BIN/
 *credentials*.json
 *.key
 *.pem
+*-base64.txt
 
 # Environment variables
 .env*

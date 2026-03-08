@@ -22,14 +22,16 @@
     <Content Include="Assets\Wide310x150Logo.scale-200.png" />
   </ItemGroup>
 
-  <!-- Include appsettings.json and Keys folder in output -->
+  <!-- Include appsettings.json and Keys folder in output - Updated for Release builds -->
   <ItemGroup>
-    <None Include="appsettings.json">
+    <Content Include="appsettings.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
-    <None Include="Keys\**">
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+    <Content Include="Keys\**" Condition="Exists('Keys')">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>
@@ -48,7 +50,7 @@
     <PackageReference Include="FirebaseAuthentication.net" Version="3.7.2" />
     <PackageReference Include="Google.Apis.Auth" Version="1.68.0" />
     <PackageReference Include="Google.Cloud.Firestore" Version="3.10.0" />
-    <PackageReference Include="Microsoft.Identity.Client" Version="4.56.0" />
+    <PackageReference Include="Microsoft.Identity.Client" Version="4.66.2" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3179.45" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.4948" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.250907003" />
@@ -72,7 +74,7 @@
     <PublishReadyToRun Condition="'$(Configuration)' == 'Debug'">False</PublishReadyToRun>
     <PublishReadyToRun Condition="'$(Configuration)' != 'Debug'">True</PublishReadyToRun>
     <PublishTrimmed Condition="'$(Configuration)' == 'Debug'">False</PublishTrimmed>
-    <PublishTrimmed Condition="'$(Configuration)' != 'Debug'">True</PublishTrimmed>
+    <PublishTrimmed Condition="'$(Configuration)' != 'Debug'">False</PublishTrimmed>
     <GenerateAppInstallerFile>False</GenerateAppInstallerFile>
     <AppxPackageSigningEnabled>False</AppxPackageSigningEnabled>
     <AppxPackageSigningTimestampDigestAlgorithm>SHA256</AppxPackageSigningTimestampDigestAlgorithm>
@@ -81,5 +83,10 @@
     <AppxBundle>Never</AppxBundle>
     <GenerateTemporaryStoreCertificate>True</GenerateTemporaryStoreCertificate>
     <HoursBetweenUpdateChecks>0</HoursBetweenUpdateChecks>
+    
+    <!-- Force Release mode for Microsoft.Identity.Client native libraries -->
+    <UseDebugLibraries Condition="'$(Configuration)' != 'Debug'">False</UseDebugLibraries>
+    <DebugSymbols Condition="'$(Configuration)' != 'Debug'">False</DebugSymbols>
+    <DebugType Condition="'$(Configuration)' != 'Debug'">None</DebugType>
   </PropertyGroup>
 </Project>

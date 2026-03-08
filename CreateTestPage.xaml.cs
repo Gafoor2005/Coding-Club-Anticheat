@@ -207,9 +207,15 @@ namespace Coding_Club_Anticheat
                 bool initialized;
                 if (!string.IsNullOrEmpty(serviceAccountKeyPath))
                 {
-                    // Use direct service account key path
+                    // Use direct service account key path with embedded JSON support
                     System.Diagnostics.Debug.WriteLine($"Initializing Firebase with direct service account key: {serviceAccountKeyPath}");
-                    initialized = await _firebaseService.InitializeAsync(_projectId, serviceAccountKeyPath);
+                    initialized = await _firebaseService.InitializeAsync(_projectId, serviceAccountKeyPath, settings.Firebase.ServiceAccountKeyJson);
+                }
+                else if (!string.IsNullOrEmpty(settings.Firebase.ServiceAccountKeyJson))
+                {
+                    // Use embedded JSON credentials (for distributed apps)
+                    System.Diagnostics.Debug.WriteLine("Initializing Firebase with embedded credentials");
+                    initialized = await _firebaseService.InitializeAsync(_projectId, null, settings.Firebase.ServiceAccountKeyJson);
                 }
                 else
                 {
@@ -221,15 +227,15 @@ namespace Coding_Club_Anticheat
                 if (!initialized)
                 {
                     string errorMessage = "Failed to initialize Firebase. ";
-                    if (string.IsNullOrEmpty(serviceAccountKeyPath))
+                    if (string.IsNullOrEmpty(serviceAccountKeyPath) && string.IsNullOrEmpty(settings.Firebase.ServiceAccountKeyJson))
                     {
                         errorMessage += "Please check the Firebase configuration in appsettings.json. " +
-                                      "Consider setting the ServiceAccountKeyPath or " +
+                                      "Consider setting the ServiceAccountKeyPath or ServiceAccountKeyJson, or " +
                                       "the GOOGLE_APPLICATION_CREDENTIALS environment variable.";
                     }
                     else
                     {
-                        errorMessage += $"Please verify the service account key file exists at: {serviceAccountKeyPath}";
+                        errorMessage += $"Please verify the service account key file or embedded credentials are valid.";
                     }
                     
                     await ShowErrorDialogAsync("Firebase Error", errorMessage);
@@ -320,10 +326,14 @@ namespace Coding_Club_Anticheat
                 var settings = _configurationService.Settings;
                 string serviceAccountKeyPath = settings.Firebase.ServiceAccountKeyPath;
 
-                // Initialize Firebase if needed
+                // Initialize Firebase if needed with embedded JSON support
                 if (!string.IsNullOrEmpty(serviceAccountKeyPath))
                 {
-                    await _firebaseService.InitializeAsync(_projectId, serviceAccountKeyPath);
+                    await _firebaseService.InitializeAsync(_projectId, serviceAccountKeyPath, settings.Firebase.ServiceAccountKeyJson);
+                }
+                else if (!string.IsNullOrEmpty(settings.Firebase.ServiceAccountKeyJson))
+                {
+                    await _firebaseService.InitializeAsync(_projectId, null, settings.Firebase.ServiceAccountKeyJson);
                 }
                 else
                 {

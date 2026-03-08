@@ -1,0 +1,9 @@
+﻿    public class FirebaseSettings
+    {
+        public string ProjectId { get; set; } = "";
+        public string ServiceAccountKeyPath { get; set; } = "";
+        public string ServiceAccountKeyJson { get; set; } = ""; // Embedded JSON credentials (Base64 encoded)
+        public string ApiKey { get; set; } = "";
+        public string GoogleOAuthClientId { get; set; } = "";
+        public string GoogleOAuthClientSecret { get; set; } = "";
+    }

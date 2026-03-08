@@ -74,70 +74,121 @@ namespace Coding_Club_Anticheat.Services
         /// <returns>True if initialization successful, false otherwise</returns>
         public async Task<bool> InitializeAsync(string projectId, string serviceAccountKeyPath)
         {
+            return await InitializeAsync(projectId, serviceAccountKeyPath, null);
+        }
+
+        /// <summary>
+        /// Initialize Firebase using embedded JSON credentials or file path
+        /// </summary>
+        /// <param name="projectId">Firebase project ID</param>
+        /// <param name="serviceAccountKeyPath">Path to the service account JSON key file (optional if embeddedJson is provided)</param>
+        /// <param name="embeddedJsonBase64">Base64-encoded service account JSON (for distributed apps)</param>
+        /// <returns>True if initialization successful, false otherwise</returns>
+        public async Task<bool> InitializeAsync(string projectId, string? serviceAccountKeyPath, string? embeddedJsonBase64)
+        {
             try
             {
-                System.Diagnostics.Debug.WriteLine($"=== FIREBASE INITIALIZATION START (Direct Path Method) ===");
+                System.Diagnostics.Debug.WriteLine($"=== FIREBASE INITIALIZATION START ===");
                 System.Diagnostics.Debug.WriteLine($"Project ID: {projectId}");
-                System.Diagnostics.Debug.WriteLine($"Service Account Key Path: {serviceAccountKeyPath}");
                 System.Diagnostics.Debug.WriteLine($"Current Directory: {Directory.GetCurrentDirectory()}");
                 
-                // Resolve absolute path if relative path is provided
-                string absolutePath = Path.IsPathRooted(serviceAccountKeyPath) 
-                    ? serviceAccountKeyPath 
-                    : Path.GetFullPath(serviceAccountKeyPath);
-                
-                System.Diagnostics.Debug.WriteLine($"Resolved Absolute Path: {absolutePath}");
+                GoogleCredential? credential = null;
 
-                // Check if the service account key file exists
-                if (!File.Exists(absolutePath))
+                // Try embedded JSON first (for distributed apps)
+                if (!string.IsNullOrEmpty(embeddedJsonBase64))
                 {
-                    System.Diagnostics.Debug.WriteLine($"ERROR: Service account key file not found at: {absolutePath}");
-                    
-                    // Try to find the file in common locations
-                    var searchPaths = new[]
+                    try
                     {
-                        serviceAccountKeyPath,
-                        Path.Combine(Directory.GetCurrentDirectory(), serviceAccountKeyPath),
-                        Path.Combine(AppDomain.CurrentDomain.BaseDirectory, serviceAccountKeyPath),
-                        Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Keys", "firebase-service-account.json")
-                    };
-
-                    System.Diagnostics.Debug.WriteLine("Searching for file in alternative paths:");
-                    foreach (var searchPath in searchPaths)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"  Checking: {searchPath} - Exists: {File.Exists(searchPath)}");
-                        if (File.Exists(searchPath))
+                        System.Diagnostics.Debug.WriteLine("Attempting to load credentials from embedded JSON...");
+                        byte[] jsonBytes = Convert.FromBase64String(embeddedJsonBase64);
+                        string jsonString = System.Text.Encoding.UTF8.GetString(jsonBytes);
+                        
+                        using (var stream = new MemoryStream(jsonBytes))
                         {
-                            absolutePath = searchPath;
-                            System.Diagnostics.Debug.WriteLine($"  Found file at: {absolutePath}");
-                            break;
+                            credential = GoogleCredential.FromStream(stream);
+                            System.Diagnostics.Debug.WriteLine("✓ Credentials loaded successfully from embedded JSON");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Failed to load embedded credentials: {ex.Message}");
+                        // Fall through to try file path
+                    }
+                }
+
+                // Try file path if embedded JSON failed or wasn't provided
+                if (credential == null && !string.IsNullOrEmpty(serviceAccountKeyPath))
+                {
+                    System.Diagnostics.Debug.WriteLine($"Service Account Key Path: {serviceAccountKeyPath}");
+                    
+                    // Resolve absolute path if relative path is provided
+                    string absolutePath = Path.IsPathRooted(serviceAccountKeyPath) 
+                        ? serviceAccountKeyPath 
+                        : Path.GetFullPath(serviceAccountKeyPath);
+                    
+                    System.Diagnostics.Debug.WriteLine($"Resolved Absolute Path: {absolutePath}");
+
+                    // Check if the service account key file exists
+                    if (!File.Exists(absolutePath))
+                    {
+                        System.Diagnostics.Debug.WriteLine($"ERROR: Service account key file not found at: {absolutePath}");
+                        
+                        // Try to find the file in common locations
+                        var searchPaths = new[]
+                        {
+                            serviceAccountKeyPath,
+                            Path.Combine(Directory.GetCurrentDirectory(), serviceAccountKeyPath),
+                            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, serviceAccountKeyPath),
+                            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Keys", "firebase-service-account.json")
+                        };
+
+                        System.Diagnostics.Debug.WriteLine("Searching for file in alternative paths:");
+                        foreach (var searchPath in searchPaths)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"  Checking: {searchPath} - Exists: {File.Exists(searchPath)}");
+                            if (File.Exists(searchPath))
+                            {
+                                absolutePath = searchPath;
+                                System.Diagnostics.Debug.WriteLine($"  Found file at: {absolutePath}");
+                                break;
+                            }
+                        }
+
+                        if (!File.Exists(absolutePath))
+                        {
+                            System.Diagnostics.Debug.WriteLine("ERROR: Could not find service account key file in any location");
+                            return false;
                         }
                     }
 
-                    if (!File.Exists(absolutePath))
+                    System.Diagnostics.Debug.WriteLine($"Service account key file found at: {absolutePath}");
+
+                    System.Diagnostics.Debug.WriteLine("Loading credentials from service account key file...");
+
+                    // Load credentials from the service account key file
+                    using (var stream = new FileStream(absolutePath, FileMode.Open, FileAccess.Read))
                     {
-                        return false;
+                        credential = GoogleCredential.FromStream(stream);
+                        System.Diagnostics.Debug.WriteLine("✓ Credentials loaded successfully from file");
                     }
                 }
 
-                System.Diagnostics.Debug.WriteLine($"Service account key file found at: {absolutePath}");
-
-                // Test internet connectivity first
-                bool hasInternetConnection = await TestInternetConnectivityAsync();
-                if (!hasInternetConnection)
+                if (credential == null)
                 {
-                    System.Diagnostics.Debug.WriteLine("ERROR: No internet connection detected");
+                    System.Diagnostics.Debug.WriteLine("ERROR: No credentials available (neither embedded JSON nor file path worked)");
                     return false;
                 }
 
-                System.Diagnostics.Debug.WriteLine("Loading credentials from service account key file...");
-
-                // Load credentials from the service account key file
-                GoogleCredential credential;
-                using (var stream = new FileStream(absolutePath, FileMode.Open, FileAccess.Read))
+                // Test internet connectivity first (but don't fail if test itself fails)
+                bool hasInternetConnection = await TestInternetConnectivityAsync();
+                if (!hasInternetConnection)
                 {
-                    credential = GoogleCredential.FromStream(stream);
-                    System.Diagnostics.Debug.WriteLine("Credentials loaded successfully from stream");
+                    System.Diagnostics.Debug.WriteLine("WARNING: Internet connectivity test failed, but will attempt Firebase connection anyway");
+                    System.Diagnostics.Debug.WriteLine("Note: This could be due to firewall/proxy settings blocking test URLs");
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("Internet connectivity confirmed");
                 }
 
                 // Ensure the credential has the required scopes
@@ -160,15 +211,45 @@ namespace Coding_Club_Anticheat.Services
                 
                 System.Diagnostics.Debug.WriteLine("Firestore database connection created, testing connection...");
                 
-                // Test the connection by trying to access the database
-                await TestFirebaseConnectionAsync();
+                // Test the connection by trying to access the database with retry logic
+                int maxRetries = 3;
+                int retryDelay = 1000; // milliseconds
+                Exception? lastException = null;
                 
-                System.Diagnostics.Debug.WriteLine("=== FIREBASE INITIALIZATION SUCCESS (Direct Path Method) ===");
-                return true;
+                for (int attempt = 1; attempt <= maxRetries; attempt++)
+                {
+                    try
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Connection test attempt {attempt}/{maxRetries}...");
+                        await TestFirebaseConnectionAsync();
+                        System.Diagnostics.Debug.WriteLine("=== FIREBASE INITIALIZATION SUCCESS ===");
+                        return true;
+                    }
+                    catch (Exception ex)
+                    {
+                        lastException = ex;
+                        System.Diagnostics.Debug.WriteLine($"Connection test attempt {attempt} failed: {ex.Message}");
+                        
+                        if (attempt < maxRetries)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"Retrying in {retryDelay}ms...");
+                            await Task.Delay(retryDelay);
+                            retryDelay *= 2; // Exponential backoff
+                        }
+                    }
+                }
+                
+                // All retries failed
+                if (lastException != null)
+                {
+                    throw lastException;
+                }
+                
+                return false;
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"=== FIREBASE INITIALIZATION FAILED (Direct Path Method) ===");
+                System.Diagnostics.Debug.WriteLine($"=== FIREBASE INITIALIZATION FAILED ===");
                 System.Diagnostics.Debug.WriteLine($"Firebase initialization failed: {ex.Message}");
                 System.Diagnostics.Debug.WriteLine($"Exception Type: {ex.GetType().Name}");
                 System.Diagnostics.Debug.WriteLine($"Stack Trace: {ex.StackTrace}");
@@ -185,10 +266,6 @@ namespace Coding_Club_Anticheat.Services
                 else if (ex.Message.Contains("permission") || ex.Message.Contains("access"))
                 {
                     System.Diagnostics.Debug.WriteLine("SOLUTION: Check your Firebase project permissions and service account roles");
-                }
-                else if (ex.Message.Contains("ApplicationDefaultCredentials") || ex.Message.Contains("default credentials"))
-                {
-                    System.Diagnostics.Debug.WriteLine("SOLUTION: This suggests the direct credential loading failed and it's falling back to default credentials");
                 }
                 
                 return false;
@@ -231,19 +308,55 @@ namespace Coding_Club_Anticheat.Services
                     System.Diagnostics.Debug.WriteLine("Attempting to use default credentials...");
                 }
 
-                // Test internet connectivity first
+                // Test internet connectivity first (but don't fail if test itself fails)
                 bool hasInternetConnection = await TestInternetConnectivityAsync();
                 if (!hasInternetConnection)
                 {
-                    System.Diagnostics.Debug.WriteLine("ERROR: No internet connection detected");
-                    return false;
+                    System.Diagnostics.Debug.WriteLine("WARNING: Internet connectivity test failed, but will attempt Firebase connection anyway");
+                    System.Diagnostics.Debug.WriteLine("Note: This could be due to firewall/proxy settings blocking test URLs");
+                    // Don't return false here - continue with Firebase initialization
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("Internet connectivity confirmed");
                 }
 
                 // Create Firestore database connection using default credentials
                 _firestoreDb = FirestoreDb.Create(projectId);
                 
-                // Test the connection by trying to access the database
-                await TestFirebaseConnectionAsync();
+                // Test the connection by trying to access the database with retry logic
+                int maxRetries = 3;
+                int retryDelay = 1000; // milliseconds
+                Exception? lastException = null;
+                
+                for (int attempt = 1; attempt <= maxRetries; attempt++)
+                {
+                    try
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Connection test attempt {attempt}/{maxRetries}...");
+                        await TestFirebaseConnectionAsync();
+                        System.Diagnostics.Debug.WriteLine("Firebase initialization successful using default credentials!");
+                        return true;
+                    }
+                    catch (Exception ex)
+                    {
+                        lastException = ex;
+                        System.Diagnostics.Debug.WriteLine($"Connection test attempt {attempt} failed: {ex.Message}");
+                        
+                        if (attempt < maxRetries)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"Retrying in {retryDelay}ms...");
+                            await Task.Delay(retryDelay);
+                            retryDelay *= 2; // Exponential backoff
+                        }
+                    }
+                }
+                
+                // All retries failed
+                if (lastException != null)
+                {
+                    throw lastException;
+                }
                 
                 System.Diagnostics.Debug.WriteLine("Firebase initialization successful using default credentials!");
                 return true;
@@ -277,12 +390,41 @@ namespace Coding_Club_Anticheat.Services
             try
             {
                 using var client = new System.Net.Http.HttpClient();
-                client.Timeout = TimeSpan.FromSeconds(10);
+                client.Timeout = TimeSpan.FromSeconds(5); // Reduced timeout for faster failure detection
                 
-                // Test connection to Google's public DNS
-                var response = await client.GetAsync("https://www.google.com");
-                System.Diagnostics.Debug.WriteLine($"Internet connectivity test: {response.StatusCode}");
-                return response.IsSuccessStatusCode;
+                // Try multiple endpoints to increase reliability
+                var endpoints = new[]
+                {
+                    "https://firestore.googleapis.com", // Firebase directly - most important
+                    "https://www.googleapis.com", // Google APIs
+                    "https://www.google.com", // Google homepage - fallback
+                    "https://dns.google" // Google DNS - another fallback
+                };
+                
+                System.Diagnostics.Debug.WriteLine("Testing internet connectivity...");
+                
+                // Try each endpoint in order, return true if any succeeds
+                foreach (var endpoint in endpoints)
+                {
+                    try
+                    {
+                        System.Diagnostics.Debug.WriteLine($"  Trying: {endpoint}");
+                        var response = await client.GetAsync(endpoint);
+                        if (response.IsSuccessStatusCode)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"  ✓ Internet connectivity confirmed via {endpoint} ({response.StatusCode})");
+                            return true;
+                        }
+                        System.Diagnostics.Debug.WriteLine($"  ✗ {endpoint} returned: {response.StatusCode}");
+                    }
+                    catch (Exception endpointEx)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"  ✗ {endpoint} failed: {endpointEx.Message}");
+                    }
+                }
+                
+                System.Diagnostics.Debug.WriteLine("Internet connectivity test: All endpoints failed");
+                return false;
             }
             catch (Exception ex)
             {
@@ -298,16 +440,37 @@ namespace Coding_Club_Anticheat.Services
 
             try
             {
+                System.Diagnostics.Debug.WriteLine("Testing Firebase connection...");
+                
                 // Try to read from the collection (this will create it if it doesn't exist)
                 var collectionRef = _firestoreDb.Collection(CollectionName);
                 var query = collectionRef.Limit(1);
+                
+                System.Diagnostics.Debug.WriteLine($"Executing test query on collection '{CollectionName}'...");
                 var snapshot = await query.GetSnapshotAsync();
                 
-                System.Diagnostics.Debug.WriteLine($"Firebase connection test successful. Collection '{CollectionName}' accessible.");
+                System.Diagnostics.Debug.WriteLine($"✓ Firebase connection test successful. Collection '{CollectionName}' accessible.");
+                System.Diagnostics.Debug.WriteLine($"  Documents in test query: {snapshot.Documents.Count}");
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Firebase connection test failed: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"✗ Firebase connection test failed: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"  Exception Type: {ex.GetType().Name}");
+                
+                // Provide specific error guidance
+                if (ex.Message.Contains("permission") || ex.Message.Contains("PERMISSION_DENIED") || ex.Message.Contains("forbidden"))
+                {
+                    System.Diagnostics.Debug.WriteLine("  ISSUE: Permission denied - check Firebase security rules and service account permissions");
+                }
+                else if (ex.Message.Contains("network") || ex.Message.Contains("connection") || ex.Message.Contains("timeout"))
+                {
+                    System.Diagnostics.Debug.WriteLine("  ISSUE: Network problem - check internet connection and firewall settings");
+                }
+                else if (ex.Message.Contains("project") || ex.Message.Contains("not found"))
+                {
+                    System.Diagnostics.Debug.WriteLine("  ISSUE: Project not found - verify your Firebase Project ID is correct");
+                }
+                
                 throw;
             }
         }
@@ -689,6 +852,11 @@ namespace Coding_Club_Anticheat.Services
         {
             var diagnostics = new List<string>();
             
+            diagnostics.Add("=== FIREBASE CONFIGURATION DIAGNOSTICS ===");
+            diagnostics.Add($"Current Directory: {Directory.GetCurrentDirectory()}");
+            diagnostics.Add($"Base Directory: {AppDomain.CurrentDomain.BaseDirectory}");
+            diagnostics.Add("");
+            
             // Check environment variable
             string? envCredentialsPath = Environment.GetEnvironmentVariable("GOOGLE_APPLICATION_CREDENTIALS");
             diagnostics.Add($"GOOGLE_APPLICATION_CREDENTIALS: {envCredentialsPath ?? "NOT SET"}");
@@ -704,22 +872,54 @@ namespace Coding_Club_Anticheat.Services
                     diagnostics.Add($"Environment credentials file modified: {fileInfo.LastWriteTime}");
                 }
             }
+            diagnostics.Add("");
 
             // Check provided service account key file path
             if (!string.IsNullOrEmpty(serviceAccountKeyPath))
             {
                 diagnostics.Add($"Provided service account key path: {serviceAccountKeyPath}");
-                diagnostics.Add($"Provided credentials file exists: {File.Exists(serviceAccountKeyPath)}");
-                if (File.Exists(serviceAccountKeyPath))
+                
+                // Try to resolve the path
+                string resolvedPath = Path.IsPathRooted(serviceAccountKeyPath) 
+                    ? serviceAccountKeyPath 
+                    : Path.GetFullPath(serviceAccountKeyPath);
+                    
+                diagnostics.Add($"Resolved absolute path: {resolvedPath}");
+                diagnostics.Add($"Provided credentials file exists: {File.Exists(resolvedPath)}");
+                
+                if (File.Exists(resolvedPath))
                 {
-                    var fileInfo = new FileInfo(serviceAccountKeyPath);
+                    var fileInfo = new FileInfo(resolvedPath);
                     diagnostics.Add($"Provided credentials file size: {fileInfo.Length} bytes");
                     diagnostics.Add($"Provided credentials file modified: {fileInfo.LastWriteTime}");
+                    diagnostics.Add($"File is readable: {(fileInfo.Attributes & FileAttributes.ReadOnly) == 0}");
+                }
+                else
+                {
+                    // Show where we looked
+                    diagnostics.Add("File not found. Searched locations:");
+                    var searchPaths = new[]
+                    {
+                        serviceAccountKeyPath,
+                        Path.Combine(Directory.GetCurrentDirectory(), serviceAccountKeyPath),
+                        Path.Combine(AppDomain.CurrentDomain.BaseDirectory, serviceAccountKeyPath),
+                        Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Keys", "firebase-service-account.json")
+                    };
+                    foreach (var path in searchPaths)
+                    {
+                        diagnostics.Add($"  - {path} [{(File.Exists(path) ? "EXISTS" : "NOT FOUND")}]");
+                    }
                 }
             }
+            else
+            {
+                diagnostics.Add("No service account key path provided in configuration");
+            }
+            diagnostics.Add("");
             
             // Check Firebase initialization status
             diagnostics.Add($"Firebase initialized: {_firestoreDb != null}");
+            diagnostics.Add("=== END DIAGNOSTICS ===");
             
             return string.Join("\n", diagnostics);
         }

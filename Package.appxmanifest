@@ -10,7 +10,7 @@
   <Identity
     Name="Developer.gg.CodingClubAnticheat"
     Publisher="CN=BD7EB311-B789-4300-A37F-EEC69CAC4F46"
-    Version="2.0.2.0" />
+    Version="2.1.2.0" />
 
   <mp:PhoneIdentity PhoneProductId="900695f5-e0d5-4554-8b55-cefc97f869b4" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 

@@ -55,7 +55,7 @@ Your information is used to:
 
 For privacy questions or data requests, contact: thedeveloper.gg@gmail.com
 
-**Developer:** Gafoor  
+**Developer:** Mohammad Abdul Gafoor  
 **App:** Coding Club Anticheat v2.0
 
 This policy complies with GDPR, CCPA, FERPA, and COPPA requirements.

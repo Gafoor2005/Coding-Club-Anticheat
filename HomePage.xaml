@@ -114,13 +114,34 @@
                                     CornerRadius="8"/>
                             
                             <Button x:Name="StartTestButton" 
-                                    Content="Start Test" 
-                                    Width="120" 
+                                    Width="140" 
                                     Height="40" 
                                     Click="StartTestButton_Click"
                                     Style="{StaticResource AccentButtonStyle}"
                                     CornerRadius="8"
-                                    IsEnabled="False"/>
+                                    IsEnabled="False">
+                                <Grid>
+                                    <!-- Normal content -->
+                                    <StackPanel x:Name="StartTestContent" 
+                                                Orientation="Horizontal" 
+                                                Spacing="8">
+                                        <FontIcon Glyph="&#xE7C8;" FontSize="14"/>
+                                        <TextBlock Text="Start Test" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                    
+                                    <!-- Loading content -->
+                                    <StackPanel x:Name="StartTestLoadingContent" 
+                                                Orientation="Horizontal" 
+                                                Spacing="8"
+                                                Visibility="Collapsed">
+                                        <ProgressRing Width="16" 
+                                                      Height="16" 
+                                                      IsActive="True"
+                                                      Foreground="White"/>
+                                        <TextBlock Text="Validating..." VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Button>
                         </StackPanel>
                     </StackPanel>
                 </StackPanel>
